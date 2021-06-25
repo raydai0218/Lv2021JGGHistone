@@ -1,0 +1,94 @@
+---
+title: "fig 4 Hub species of the co-occurrence network in the rice root microbiota are regulated by the rice histone methylation."
+author: "Dairui"
+date: "2021/6/20"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+# Clean workspace
+rm(list=ls()) 
+# Load setting and functions
+source("../script/stat_plot_functions.R")
+# Set output directory
+output_dir="./"
+```
+
+
+## filter ASVs for constructing the network:
+```{r}
+# input files:
+asvtab = read.table("../data/asvtab_1491ASVs.txt", header=T, row.names=1, sep="\t",stringsAsFactors = F)
+taxonomy = read.table("../data/taxonomy.txt", header = T, sep = "\t", stringsAsFactors = F)
+Mut = read.table("../data/mutation_condition.txt",header = T, sep = "\t", stringsAsFactors = F)
+# keep the ASVs with a frequency above 8
+asv.present <- asvtab
+asv.present[asvtab!=0] <- 1 
+asv.pick <- asvtab[rowSums(asv.present)>=8,] #1166 ASVs left
+```
+
+## prepare edges and nodes table:
+```{r}
+dat = t(asv.pick)
+#WGCNA construct the relative matrix (pearson).
+cor.mat <- corAndPvalue(dat)
+cor.decon <-as.matrix(cor.mat$cor)
+
+cor.r = as.data.frame(cor.mat$cor)
+cor.r$asv = rownames(cor.r)
+cor.p = as.data.frame(cor.mat$p)
+cor.p$asv = rownames(cor.mat$p)
+cor.r[lower.tri(cor.r)] <-0
+cor.p[lower.tri(cor.p)] <-0
+
+
+pear.cor <- melt(cor.r, id.vars = "asv")
+pear.p <- melt( cor.p, id.vars = "asv")
+
+
+
+pear <- data.frame(source = pear.cor[,1], target = pear.cor[,2], 
+                   pearsonCor = pear.cor[,3], pearsonPV = pear.p[,3])
+# rm coefficient=0
+pear.trim <- pear[pear[,3] != "0",]
+pear.trim <- pear.trim[-which(pear.trim$source == pear.trim$target),]  
+
+pear.trim$weight <- abs(as.vector(pear.trim[,3])) 
+pear.trim$group <- 0 
+pear.trim[which(pear.trim[,3] < 0),"group"] <- 2     #2 -> negative 
+pear.trim[which(pear.trim[,3] > 0),"group"] <- 1     #1 -> positive
+pear.trim$adjustP = p.adjust(pear.trim$pearsonPV)
+
+# keep coefficient > 0.7 and adjust P value < 0.05
+pear.result <- pear.trim[pear.trim$weight > 0.7&pear.trim$adjustP < 0.05,]  #3465 edges
+
+
+node.result <- data.frame(id = as.character(rownames(asv.pick)), weight = rowMeans(asv.pick))
+node.result = merge(taxonomy[,2:6], node.result, by = "row.names")
+node.result$PC = node.result$Phylum
+node.result[node.result$PC == c("Proteobacteria"),]$PC = node.result[node.result$PC == c("Proteobacteria"),]$Class
+node.result[node.result$PC %in% c("Chloroflexi","Fibrobacteres", "Acidobacteria","Nitrospirae","Fusobacteria",
+                                  "Verrucomicrobia","Ignavibacteriae","Gemmatimonadetes","Crenarchaeota","Oligoflexia",
+                                  "Deinococcus-Thermus","Armatimonadetes","Planctomycetes","Chlamydiae","Campilobacterota",
+                                  "Deferribacteres","Rhodothermaeota","Kiritimatiellaeota","Abditibacteriota","Chlorobi",
+                                  "Euryarchaeota","Elusimicrobia","Thermotogae","Zetaproteobacteria"),]$PC = c("Low abundance")
+color_dat = data.frame(PC =c("Betaproteobacteria","Deltaproteobacteria","Gammaproteobacteria",
+                             "Alphaproteobacteria","Firmicutes","Actinobacteria","Bacteroidetes",
+                             "Spirochaetes","Unclassified", "Low abundance" ) , plot_color = brewer.pal(10, "Spectral"))
+data = merge(node.result, color_dat, by = "PC", all.x = T)
+data = merge(data, Mut, by = "id", all.x = T)
+
+unique_nodes = unique(c(as.character(pear.result$source), as.character(pear.result$target)))
+
+nodes = data[node.result$id %in% unique_nodes,-3] #709 nodes
+
+colnames(nodes)[9] = c("color")
+
+
+write.csv(pear.result, "edge.csv", quote = F, row.names = F)
+write.csv(nodes, "nodes.csv", quote = F, row.names = F)
+```
+
+The method of visualization in https://gephi.org
+

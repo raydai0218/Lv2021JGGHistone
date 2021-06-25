@@ -1,0 +1,143 @@
+---
+title: "fig 2 Mutations in rice histone methylation-related genes influence the composition of root microbiota at the phylum and family levels."
+author: "Dairui"
+date: "2021/6/20"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+# Clean workspace
+rm(list=ls()) 
+# Load setting and functions
+source("../script/stat_plot_functions.R")
+# Set output directory
+output_dir="./"
+```
+
+
+## A. Phylum-level distribution of root microbiota
+```{r}
+# input files:
+design = read.table("../data/design.txt", header=T, row.names=1, sep="\t",stringsAsFactors = F)
+tax_sample = read.table("../data/sum_pc.txt", header=T, row.names=1, sep="\t", comment.char="") 
+
+# reorder the groups:
+design$group = design$genotype
+design$group = factor(design$group, levels = c("Bulksoil","DJ-WT","DJ-jmj703","ZH11-WT","ZH11-sdg714","Nip-WT","Nip-dcl3a-1","Nip-dcl3a-3"))
+
+# filter samples, remove the rhizosphere:
+sub_design = subset(design, compartment != c("Rhizosphere"))
+sub_sample = tax_sample[,rownames(sub_design)]
+#sort by the relative abundance
+mean_sort = sub_sample[(order(-rowSums(sub_sample))), ]
+mean_sort = as.data.frame(mean_sort)
+# keep the top 10 
+other = colSums(mean_sort[10:dim(mean_sort)[1], ])
+mean_sort = mean_sort[1:(10 - 1), ]
+mean_sort = rbind(mean_sort,other)
+rownames(mean_sort)[10] = c("Low abundance")
+
+merge_tax=mean_sort
+
+# aggregate samples by groups
+sampFile = data.frame(sample=row.names(sub_design), group=sub_design$group,row.names = row.names(sub_design))
+
+mat_t = t(merge_tax)
+mat_t2 = merge(sampFile, mat_t, by="row.names")
+mat_t2 = mat_t2[,c(-1,-2)]
+
+mat_mean = aggregate(mat_t2[,-1], by=mat_t2[1], FUN=mean) # mean
+mat_mean_final = do.call(rbind, mat_mean)[-1,]
+geno = mat_mean$group
+colnames(mat_mean_final) = geno
+
+mean_sort=as.data.frame(mat_mean_final)
+
+# prepare for plot
+mean_sort$tax = rownames(mean_sort)
+write.table(mean_sort, "data_for_phylum_plot.txt", row.names = F, col.names = T, sep = "\t", quote = F)
+data_all = as.data.frame(melt(mean_sort, id.vars=c("tax")))
+#  set taxonomy order by abundance, default by alphabet
+if (TRUE){
+  data_all$tax  = factor(data_all$tax, levels=rownames(mean_sort))
+}
+
+p = ggplot(data_all, aes(x=variable, y = value, fill = tax )) + 
+  geom_bar(stat = "identity",position="fill", width=0.7)+ 
+  scale_y_continuous(labels = scales::percent) + 
+  scale_fill_brewer(palette = "Spectral") +
+  xlab("Groups")+ylab("Percentage (%)")+ theme_classic()
+if (length(unique(data_all$variable))>3){
+  p=p+theme(axis.text.x=element_text(angle=45,vjust=1, hjust=1))
+}
+p
+
+# save pdf
+ggsave("phylum_group_Rt_2A.pdf", p, width = 5, height = 4)
+```
+
+
+## B. Family-level distribution of root microbiota
+```{r}
+# input files:
+tax_sample = read.table("../data/sum_f.txt", header=T, row.names=1, sep="\t", comment.char="") 
+
+# filter samples, remove the rhizosphere:
+sub_sample = tax_sample[,rownames(sub_design)]
+#sort by the relative abundance
+mean_sort = sub_sample[(order(-rowSums(sub_sample))), ]
+mean_sort = as.data.frame(mean_sort)
+# keep the top 15
+other = colSums(mean_sort[15:dim(mean_sort)[1], ])
+mean_sort = mean_sort[1:(15 - 1), ]
+mean_sort = rbind(mean_sort,other)
+rownames(mean_sort)[15] = c("Low abundance")
+
+merge_tax=mean_sort
+
+# aggregate samples by groups
+sampFile = data.frame(sample=row.names(sub_design), group=sub_design$group,row.names = row.names(sub_design))
+
+mat_t = t(merge_tax)
+mat_t2 = merge(sampFile, mat_t, by="row.names")
+mat_t2 = mat_t2[,c(-1,-2)]
+
+mat_mean = aggregate(mat_t2[,-1], by=mat_t2[1], FUN=mean) # mean
+mat_mean_final = do.call(rbind, mat_mean)[-1,]
+geno = mat_mean$group
+colnames(mat_mean_final) = geno
+
+mean_sort=as.data.frame(mat_mean_final)
+
+# prepare for plot
+mean_sort$tax = rownames(mean_sort)
+write.table(mean_sort, "data_for_family_plot.txt", row.names = F, col.names = T, sep = "\t", quote = F)
+data_all = as.data.frame(melt(mean_sort, id.vars=c("tax")))
+#  set taxonomy order by abundance, default by alphabet
+if (TRUE){
+  data_all$tax  = factor(data_all$tax, levels=c("Comamonadaceae","Cystobacterineae","Gallionellaceae",
+                                                "Sterolibacteriaceae","Methylococcaceae","Aeromonadaceae",
+                                                "Clostridiaceae 1","Bradyrhizobiaceae","Spirochaetaceae",
+                                                "Azonexaceae","Methylophilaceae","Chromobacteriaceae",
+                                                "Paenibacillaceae 1","Unassigned","Low abundance" ))
+}
+
+color = c("#F79F1F","#A3CB38","#1289A7","#D980FA","#B53471",
+          "#EE5A24","#009432","#0652DD","#9980FA","#833471",
+          "#FFC312","#006266","#5758BB","#1B1464","#6F1E51")
+
+p = ggplot(data_all, aes(x=variable, y = value, fill = tax )) + 
+  geom_bar(stat = "identity",position="fill", width=0.7)+ 
+  scale_y_continuous(labels = scales::percent) + 
+  scale_fill_manual(values = color) +
+  xlab("Groups")+ylab("Percentage (%)")+ theme_classic()
+if (length(unique(data_all$variable))>3){
+  p=p+theme(axis.text.x=element_text(angle=45,vjust=1, hjust=1))
+}
+p
+
+# save pdf
+ggsave("family_group_Rt_2B.pdf", p, width = 5, height = 4)
+```
+

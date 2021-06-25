@@ -1,0 +1,191 @@
+---
+title: fig 3 Regulation effects of rice histone methylation-related mutations on the
+  root microbiota.
+author: "Dairui"
+date: "2021/6/20"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+# Clean workspace
+rm(list=ls()) 
+# Load setting and functions
+source("../script/stat_plot_functions.R")
+# Set output directory
+output_dir="./"
+```
+
+
+## A. The enrichment and depletion features of the root microbiota
+```{r}
+mutation = read.table("../data/compare_ASV.txt", sep = "\t", row.names = 1, header = T)
+# arrange the order:
+mutation$PC = factor(mutation$PC, levels = c("Betaproteobacteria","Deltaproteobacteria","Gammaproteobacteria","Alphaproteobacteria",
+                                             "Firmicutes","Actinobacteria","Bacteroidetes","Spirochaetes","Unclassified", 
+                                             "Low_abundance"))
+mutation$Family = factor(mutation$Family, levels = c("Comamonadaceae","Cystobacterineae","Gallionellaceae","Sterolibacteriaceae",
+                                                     "Methylococcaceae","Aeromonadaceae","Clostridiaceae1","Bradyrhizobiaceae",
+                                                     "Spirochaetaceae","Azonexaceae","Methylophilaceae","Chromobacteriaceae",
+                                                     "Paenibacillaceae1","Unclassified","Low_abundance"))
+a = t(mutation[,c(3,5,7,9)])
+
+# normalize
+x = scale(a, center = F, scale = T)
+anno_col = data.frame(PC= mutation$PC,Family=mutation$Family, row.names = rownames(mutation))
+anno_row = data.frame(sample = rownames(x),row.names = rownames(x))
+# define the color：
+anno_colors = list(PC = c(Betaproteobacteria="#9E0142",Deltaproteobacteria="#D53E4F",Gammaproteobacteria="#F46D43",
+                          Alphaproteobacteria="#FDAE61",Firmicutes="#FEE08B",Actinobacteria="#E6F598",Bacteroidetes="#ABDDA4",
+                          Spirochaetes = "#66C2A5",Unclassified ="#3288BD",Low_abundance ="#5E4FA2"),
+                   Family = c(Comamonadaceae="#F79F1F",Cystobacterineae="#A3CB38",Gallionellaceae="#1289A7",Sterolibacteriaceae="#D980FA",
+                              Methylococcaceae="#B53471",Aeromonadaceae="#EE5A24",Clostridiaceae1="#009432",Bradyrhizobiaceae="#0652DD",
+                              Spirochaetaceae="#9980FA",Azonexaceae="#833471",Methylophilaceae="#FFC312",Chromobacteriaceae="#006266",
+                              Paenibacillaceae1="#5758BB",Unclassified="#CCCCCC",Low_abundance="#999999"),
+                   sample = c(dcl3a_1="#fa983a", dcl3a_3 ="#f6b93b", jmj703="#82ccdd", sdg714="#e55039"))
+
+pheatmap(x,scale = "none",clustering_method = "average",
+         annotation_col = anno_col,
+         annotation_row = anno_row,
+         annotation_colors = anno_colors,
+         color = colorRampPalette(c("#1D80D6", "white", "#eb3b5a"))(50),
+         cellwidth = 1, cellheight = 30,
+         cutree_rows = 4,
+         show_colnames = F,
+         #width = 100, height = 8,
+         filename = "ASV_different_heatmap_all.pdf",
+         treeheight_row = 20, treeheight_col = 50)
+```
+
+
+## B. Venn diagrams-Enriched
+```{r}
+# input file:
+diff = read.table("../data/diff.list",header = T, stringsAsFactors = F)
+taxonomy = read.table("../data/taxonomy.txt", header = T, sep = "\t", stringsAsFactors = F)
+taxonomy$ASVID = rownames(taxonomy)
+taxonomy$PC = taxonomy$Phylum
+taxonomy[taxonomy$PC %in% c("Proteobacteria"),]$PC = taxonomy[taxonomy$PC %in% c("Proteobacteria"),]$Class
+sub_tax = taxonomy[,c(8,9)]
+sub_tax[sub_tax$PC %in% c("Chloroflexi","Fibrobacteres", "Acidobacteria","Nitrospirae","Fusobacteria","Verrucomicrobia","Ignavibacteriae",
+                          "Gemmatimonadetes","Crenarchaeota","Oligoflexia","Deinococcus-Thermus","Armatimonadetes","Planctomycetes",
+                          "Chlamydiae","Campilobacterota","Deferribacteres","Rhodothermaeota","Kiritimatiellaeota","Abditibacteriota",
+                          "Chlorobi","Euryarchaeota","Elusimicrobia","Thermotogae","Zetaproteobacteria"),]$PC = c("Low abundance")
+
+colnames(sub_tax) = c("ID", "PC")
+data = merge(diff, sub_tax, by = "ID", all.x = T)
+data$count = as.integer(c("1"))
+
+# Enriched：
+A <- data[grepl("\\<DclMut1LsR_NipWtLsR_E\\>",data[,2]),1]
+B <- data[grepl("\\<DclMut2LsR_NipWtLsR_E\\>",data[,2]),1]
+C <- data[grepl("\\<JmjMutLsR_DjWtLsR_E\\>",data[,2]),1]
+D <- data[grepl("\\<SdgMutLsR_Zh11WtLsR_E\\>",data[,2]),1]
+
+
+color_e = c("#fa983a","#f6b93b","#82ccdd","#e55039")
+# save the photos
+p <- venn.diagram( 
+  x = list("Nip-dcl3a-1"=A, "Nip-dcl3a-3"=B, "DJ-jmj703"=C, "ZH11-sdg714"=D),
+  filename = NULL, 
+  col = "white", lwd = 3, 
+  fill = color_e,
+  alpha = 0.70,
+  label.col = c("black"),
+  cex = 1.5, fontfamily = "Helvetica",cat.fontface=4,
+  cat.col = color_e, 
+  cat.cex = 1.5, margin=0.05, 
+  cat.fontfamily = "Helvetica",
+  main = "Enriched ASVs", main.cex = 1.5, main.fontfamily = "Helvetica"
+)
+ggsave("Venn_plot_mut_enriched_ASVs.pdf",p)
+grid.draw(p)
+```
+
+
+## C. Venn diagrams-Depleted
+```{r}
+A <- data[grepl("\\<DclMut1LsR_NipWtLsR_D\\>",data[,2]),1]
+B <- data[grepl("\\<DclMut2LsR_NipWtLsR_D\\>",data[,2]),1]
+C <- data[grepl("\\<JmjMutLsR_DjWtLsR_D\\>",data[,2]),1]
+D <- data[grepl("\\<SdgMutLsR_Zh11WtLsR_D\\>",data[,2]),1]
+
+
+color_e = c("#fa983a","#f6b93b","#82ccdd","#e55039")
+# save the photos
+p <- venn.diagram( 
+  x = list("Nip-dcl3a-1"=A, "Nip-dcl3a-3"=B, "DJ-jmj703"=C, "ZH11-sdg714"=D),
+  filename = NULL, 
+  col = "white", lwd = 3, 
+  fill = color_e,
+  alpha = 0.70,
+  label.col = c("black"),
+  cex = 1.5, fontfamily = "Helvetica",cat.fontface=4,
+  cat.col = color_e, 
+  cat.cex = 1.5, margin=0.05, 
+  cat.fontfamily = "Helvetica",
+  main = "Depleted ASVs", main.cex = 1.5, main.fontfamily = "Helvetica"
+)
+ggsave("Venn_plot_mut_depleted_ASVs.pdf",p)
+grid.draw(p)
+
+```
+
+
+## D. summary of Enriched ASVs
+```{r}
+color_dat = data.frame(PC =c("Betaproteobacteria","Deltaproteobacteria","Gammaproteobacteria",
+                             "Alphaproteobacteria","Firmicutes","Actinobacteria","Bacteroidetes",
+                             "Spirochaetes","Unclassified", "Low_abundance" ) , plot_color = brewer.pal(10, "Spectral"))
+mutation$ID = rownames(mutation)
+plot_data = mutation[,c(1,11)]
+plot_data$count = as.integer(c("1"))
+
+# filter the 24 enriched ASVs
+enrich_list = mutation[mutation$dcl3a_1_vs_Nip %in% c("Enriched") & 
+                          mutation$dcl3a_3_vs_Nip %in% c("Enriched") & 
+                          mutation$jmj703_vs_Dj %in% c("Enriched") &
+                          mutation$sdg714_vs_ZH11 %in% c("Enriched"),11]
+idx = plot_data$ID %in% enrich_list
+enriched_data = plot_data[idx,]
+enriched_data = aggregate(enriched_data[,c(3)], by = enriched_data[1], FUN =sum)
+enriched_data = merge(enriched_data, color_dat, by = "PC")
+enriched_data = enriched_data[order(enriched_data$PC),]
+colnames(enriched_data) = c("PC", "count","plot_color")
+# plot
+p <- ggplot(data = enriched_data, mapping = aes(x = 'Content', y=count, fill = PC))+ 
+  geom_bar(stat = 'identity', position = 'stack', width = 0.6, color = "white")+
+  scale_fill_manual(values = c(as.character(unique(enriched_data$plot_color)))) 
+
+label=rep(sum(enriched_data$count),length(enriched_data$count))
+p = p + coord_polar(theta = 'y') + labs(x = '', y = '', title = '') + theme(axis.text = element_blank()) + theme(axis.ticks = element_blank()) + geom_text(aes(x = 0, label = label), size = 8) + theme(panel.background=element_blank(),panel.grid=element_blank())
+p
+ggsave("phyla_distribution_of_enriched_ASV.pdf",p)
+```
+
+## E. summary of Depleted ASVs
+```{r}
+# filter the 48 depleted ASVs
+deplete_list = mutation[mutation$dcl3a_1_vs_Nip %in% c("Depleted") & 
+                         mutation$dcl3a_3_vs_Nip %in% c("Depleted") & 
+                         mutation$jmj703_vs_Dj %in% c("Depleted") &
+                         mutation$sdg714_vs_ZH11 %in% c("Depleted"),11]
+idx = plot_data$ID %in% deplete_list
+depleted_data = plot_data[idx,]
+depleted_data = aggregate(depleted_data[,c(3)], by = depleted_data[1], FUN =sum)
+depleted_data = merge(depleted_data, color_dat, by = "PC")
+depleted_data = depleted_data[order(depleted_data$PC),]
+colnames(depleted_data) = c("PC", "count","plot_color")
+# plot
+p <- ggplot(data = depleted_data, mapping = aes(x = 'Content', y=count, fill = PC))+ 
+  geom_bar(stat = 'identity', position = 'stack', width = 0.6, color = "white")+
+  scale_fill_manual(values = c(as.character(unique(depleted_data$plot_color)))) 
+
+label=rep(sum(depleted_data$count),length(depleted_data$count))
+p = p + coord_polar(theta = 'y') + labs(x = '', y = '', title = '') + theme(axis.text = element_blank()) + theme(axis.ticks = element_blank()) + geom_text(aes(x = 0, label = label), size = 8) + theme(panel.background=element_blank(),panel.grid=element_blank())
+p
+ggsave("phyla_distribution_of_depleted_ASV.pdf",p)
+```
+
